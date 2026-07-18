@@ -1581,8 +1581,13 @@ html, body {
   cursor: pointer;
 }
 .cinematic-overlay #cinAnimBtn1 {
-  background: #fff;
-  color: #000;
+  background: rgba(255,255,255,.16);
+  color: rgba(255,255,255,.62);
+  border: 1px solid rgba(255,255,255,.22);
+}
+.cinematic-overlay #cinAnimBtn1:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
 }
 .cinematic-overlay #cinAnimBtn2 {
   color: #fff;
@@ -3180,10 +3185,10 @@ function showCineWechat() {
             A voyage through forgotten realms, where past and future intertwine.<br>created by 胡云芊 Camila
           </p>
           <div class="flex flex-wrap items-center gap-3 sm:gap-4">
-            <a id="cinAnimBtn1" href="mypersonalinfo.png" download class="bg-white text-black rounded-full font-medium text-base sm:text-lg px-6 sm:px-8 py-2.5 sm:py-3 flex items-center gap-2 hover:bg-gray-200 transition-colors" style="opacity:0;">
-              <span aria-hidden="true">↓</span>
-              <span>下载简历</span>
-            </a>
+            <button id="cinAnimBtn1" type="button" disabled aria-disabled="true" title="交互预览版暂不开放简历下载" style="opacity:0;">
+              <span aria-hidden="true">—</span>
+              <span>交互预览版 · 简历下载未开放</span>
+            </button>
             <button id="cinAnimBtn2" onclick="showCineWechat()" class="cin-liquid-glass rounded-full font-medium text-base sm:text-lg px-6 sm:px-8 py-2.5 sm:py-3 flex items-center gap-2" style="opacity:0;">
               <span>contact me</span>
             </button>
