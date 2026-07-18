@@ -2074,10 +2074,6 @@ window.addEventListener('resize', resizeStage);
 resizeStage();
 
 // === INIT ===
-console.log('[v2 diag] script start — checkDoorProgress, playKeytick loaded');
-// Show green dot in Hall to confirm this version of JS is running
-try { document.getElementById('diagDot').style.display = 'block'; } catch(e) {}
-
 // Unlock AudioContext on very first user gesture (browser policy: must be in event handler)
 function _unlockAudio() {
   var ctx = _getTypeAudioCtx();
