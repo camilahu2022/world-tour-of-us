@@ -2088,11 +2088,42 @@ document.addEventListener('click', _unlockAudio);
 document.addEventListener('keydown', _unlockAudio);
 document.addEventListener('touchstart', _unlockAudio);
 
+function resetEntryExperience() {
+  // Browsers may restore the previous DOM/media state after refresh or BFCache.
+  // Always return to a clean Enter screen and rewind the opening video.
+  document.querySelectorAll('.scene').forEach(function(scene) {
+    scene.classList.remove('active', 'cross-in', 'cross-out');
+    scene.style.zIndex = '';
+  });
+  var enterScene = document.getElementById('scene-enter');
+  if (enterScene) enterScene.classList.add('active');
+
+  var openingVideo = document.getElementById('openingVideo');
+  if (openingVideo) {
+    openingVideo.pause();
+    try { openingVideo.currentTime = 0; } catch (e) {}
+    openingVideo.poster = 'assets/raw/hall_bg_desktop.png';
+  }
+  var skipBtn = document.getElementById('openingSkipBtn');
+  if (skipBtn) skipBtn.classList.remove('is-visible');
+
+  var ending = document.getElementById('cinematicOverlay');
+  if (ending) ending.classList.remove('show');
+  _transitioning = false;
+  _enterStarted = false;
+  _cinematicStarted = false;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+  resetEntryExperience();
   resizeStage();
   setTimeout(function() {
     document.getElementById('loading').classList.add('hidden');
   }, 1200);
+});
+
+window.addEventListener('pageshow', function(event) {
+  if (event.persisted) resetEntryExperience();
 });
 
 // === DOOR PROGRESS TRACKING ===
@@ -2879,19 +2910,45 @@ function finishExplorer() {
 }
 
 // === ENTER SCREEN: user gesture → play BGM → start opening video ===
+var _enterStarted = false;
+
 function enterSite() {
+  if (_enterStarted) return;
+  _enterStarted = true;
+
   // Unmute and play BGM (guaranteed user gesture)
   if (_bgm) {
     _bgm.muted = false;
     _bgm.play().catch(function(){});
   }
-  // Cross-dissolve to opening video
-  navTo('scene-opening');
-  // Explicitly start the opening video (no autoplay)
+
+  // Rewind before activating the opening scene. Some browsers preserve the
+  // previous currentTime on soft refresh, which can otherwise fire "ended"
+  // immediately and appear to skip the animation.
   var video = document.getElementById('openingVideo');
   if (video) {
-    video.play().catch(function(){});
+    video.pause();
+    try { video.currentTime = 0; } catch (e) {}
+    video.poster = 'assets/raw/hall_bg_desktop.png';
+    video.play().catch(function() {
+      // If cached media state is stale, reload and retry the muted video.
+      video.load();
+      video.play().catch(function() {
+        var skipBtn = document.getElementById('openingSkipBtn');
+        if (skipBtn) skipBtn.classList.add('is-visible');
+      });
+    });
   }
+
+  // Cross-dissolve only after the video has been rewound and asked to play.
+  navTo('scene-opening');
+  setTimeout(function() {
+    var opening = document.getElementById('scene-opening');
+    var skipBtn = document.getElementById('openingSkipBtn');
+    if (opening && opening.classList.contains('active') && skipBtn) {
+      skipBtn.classList.add('is-visible');
+    }
+  }, 1500);
 }
 
 // === D01: OPENING VIDEO ===
@@ -2910,9 +2967,6 @@ function skipOpening() {
   var skipBtn = document.getElementById('openingSkipBtn');
   if (!opening || !video) return;
 
-  // Show skip button after 1.5s (per 开场动画方案_v0.2.md)
-  setTimeout(function() { skipBtn.classList.add('is-visible'); }, 1500);
-
   // Pause video when scene is hidden (memory hygiene)
   var observer = new MutationObserver(function() {
     if (!opening.classList.contains('active')) {
@@ -2927,11 +2981,11 @@ function skipOpening() {
     navTo('scene-home');
   });
 
-  // Fallback: if .mov fails to load (browsers other than Safari), auto-skip after 2s
+  // A transient media/network error should never silently skip the opening.
+  // Keep the scene visible and offer Skip while enterSite() retries playback.
   video.addEventListener('error', function() {
-    console.warn('[opening] video failed to load, auto-skipping');
+    console.warn('[opening] video failed to load');
     skipBtn.classList.add('is-visible');
-    setTimeout(skipOpening, 2000);
   });
 })();
 
