@@ -1056,6 +1056,57 @@ html, body {
   margin-top: 16px;
   letter-spacing: .06em;
 }
+.film-progress {
+  display: none;
+  width: min(360px, 70vw);
+  margin-top: 22px;
+}
+#loading.film-loading svg {
+  width: 86px;
+  height: 86px;
+  filter: drop-shadow(0 0 14px rgba(125,200,255,.35));
+}
+#loading.film-loading p {
+  margin-top: 14px;
+  font-size: clamp(18px, 2.4vw, 28px);
+  color: #b8c6d8;
+  letter-spacing: .14em;
+}
+#loading.film-loading .film-progress {
+  display: block;
+}
+.film-progress-track {
+  position: relative;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(136,150,170,.22);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(125,200,255,.08);
+}
+.film-progress-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg,#4d7aa8,#c9e8ff,#4d7aa8);
+  background-size: 200% 100%;
+  box-shadow: 0 0 12px rgba(125,200,255,.65);
+  transition: width .2s ease;
+  animation: filmProgressGlow 1.15s linear infinite;
+}
+.film-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 9px;
+  color: rgba(184,198,216,.68);
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+  letter-spacing: .12em;
+}
+@keyframes filmProgressGlow {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
 
 /* ============================================================
    Room-specific helpers
@@ -1612,6 +1663,15 @@ html, body {
     </circle>
   </svg>
   <p>creating...</p>
+  <div class="film-progress" aria-hidden="true">
+    <div class="film-progress-track">
+      <div class="film-progress-bar" id="filmProgressBar"></div>
+    </div>
+    <div class="film-progress-meta">
+      <span>PREPARING MEMORY FILM</span>
+      <span id="filmProgressValue">0%</span>
+    </div>
+  </div>
 </div>
 
 <!-- ============================================================
@@ -2111,6 +2171,13 @@ function resetEntryExperience() {
   }
   var skipBtn = document.getElementById('openingSkipBtn');
   if (skipBtn) skipBtn.classList.remove('is-visible');
+
+  var loading = document.getElementById('loading');
+  if (loading) loading.classList.remove('film-loading');
+  var filmProgressBar = document.getElementById('filmProgressBar');
+  var filmProgressValue = document.getElementById('filmProgressValue');
+  if (filmProgressBar) filmProgressBar.style.width = '0%';
+  if (filmProgressValue) filmProgressValue.textContent = '0%';
 
   var ending = document.getElementById('cinematicOverlay');
   if (ending) ending.classList.remove('show');
@@ -2934,6 +3001,8 @@ function enterSite() {
   var enterScene = document.getElementById('scene-enter');
   var openingScene = document.getElementById('scene-opening');
   var skipBtn = document.getElementById('openingSkipBtn');
+  var progressBar = document.getElementById('filmProgressBar');
+  var progressValue = document.getElementById('filmProgressValue');
   if (!video || !openingScene) {
     _enterStarted = false;
     return;
@@ -2945,8 +3014,11 @@ function enterSite() {
   if (loading) {
     var loadingText = loading.querySelector('p');
     if (loadingText) loadingText.textContent = 'loading film...';
+    loading.classList.add('film-loading');
     loading.classList.remove('hidden');
   }
+  if (progressBar) progressBar.style.width = '4%';
+  if (progressValue) progressValue.textContent = '4%';
   if (skipBtn) skipBtn.classList.remove('is-visible');
   document.querySelectorAll('.scene').forEach(function(scene) {
     scene.classList.remove('active', 'cross-in', 'cross-out');
@@ -2957,9 +3029,32 @@ function enterSite() {
   switchBGM('scene-opening');
   _transitioning = false;
 
+  var visualProgress = 4;
+  var setFilmProgress = function(value) {
+    visualProgress = Math.max(visualProgress, Math.min(100, Math.round(value)));
+    if (progressBar) progressBar.style.width = visualProgress + '%';
+    if (progressValue) progressValue.textContent = visualProgress + '%';
+  };
+  var updateBufferedProgress = function() {
+    var bufferedProgress = 0;
+    if (video.duration && isFinite(video.duration) && video.buffered.length) {
+      bufferedProgress = video.buffered.end(video.buffered.length - 1) / video.duration * 100;
+    }
+    // Keep the indicator alive while metadata is still unavailable, but reserve
+    // the final 10% for the browser's real "playing" event.
+    setFilmProgress(Math.min(90, Math.max(bufferedProgress, visualProgress + 1.5)));
+  };
+  var progressTimer = setInterval(updateBufferedProgress, 160);
+  video.addEventListener('progress', updateBufferedProgress);
+
   var revealOpening = function() {
     video.removeEventListener('playing', revealOpening);
-    if (loading) loading.classList.add('hidden');
+    video.removeEventListener('progress', updateBufferedProgress);
+    clearInterval(progressTimer);
+    setFilmProgress(100);
+    setTimeout(function() {
+      if (loading) loading.classList.add('hidden');
+    }, 180);
     setTimeout(function() {
       if (openingScene.classList.contains('active') && skipBtn) {
         skipBtn.classList.add('is-visible');
@@ -2977,6 +3072,9 @@ function enterSite() {
       video.addEventListener('canplay', function retryOpening() {
         video.removeEventListener('canplay', retryOpening);
         video.play().catch(function() {
+          video.removeEventListener('playing', revealOpening);
+          video.removeEventListener('progress', updateBufferedProgress);
+          clearInterval(progressTimer);
           _enterStarted = false;
           if (loading) loading.classList.add('hidden');
           if (skipBtn) skipBtn.classList.add('is-visible');
