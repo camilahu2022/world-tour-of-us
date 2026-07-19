@@ -2923,39 +2923,68 @@ function enterSite() {
   if (_enterStarted) return;
   _enterStarted = true;
 
-  // Unmute and play BGM (guaranteed user gesture)
+  // Unmute and play BGM (guaranteed user gesture).
   if (_bgm) {
     _bgm.muted = false;
     _bgm.play().catch(function(){});
   }
 
-  // Rewind before activating the opening scene. Some browsers preserve the
-  // previous currentTime on soft refresh, which can otherwise fire "ended"
-  // immediately and appear to skip the animation.
   var video = document.getElementById('openingVideo');
-  if (video) {
-    video.pause();
-    try { video.currentTime = 0; } catch (e) {}
-    video.poster = 'assets/raw/hall_bg_desktop.png';
-    video.play().catch(function() {
-      // If cached media state is stale, reload and retry the muted video.
-      video.load();
-      video.play().catch(function() {
-        var skipBtn = document.getElementById('openingSkipBtn');
-        if (skipBtn) skipBtn.classList.add('is-visible');
-      });
-    });
+  var loading = document.getElementById('loading');
+  var enterScene = document.getElementById('scene-enter');
+  var openingScene = document.getElementById('scene-opening');
+  var skipBtn = document.getElementById('openingSkipBtn');
+  if (!video || !openingScene) {
+    _enterStarted = false;
+    return;
   }
 
-  // Cross-dissolve only after the video has been rewound and asked to play.
-  navTo('scene-opening');
-  setTimeout(function() {
-    var opening = document.getElementById('scene-opening');
-    var skipBtn = document.getElementById('openingSkipBtn');
-    if (opening && opening.classList.contains('active') && skipBtn) {
-      skipBtn.classList.add('is-visible');
-    }
-  }, 1500);
+  // Keep a black loading screen on top until the video is genuinely playing.
+  // The opening scene is activated underneath first, so its very first visible
+  // frame is the start of the film rather than the Hall poster.
+  if (loading) {
+    var loadingText = loading.querySelector('p');
+    if (loadingText) loadingText.textContent = 'loading film...';
+    loading.classList.remove('hidden');
+  }
+  if (skipBtn) skipBtn.classList.remove('is-visible');
+  document.querySelectorAll('.scene').forEach(function(scene) {
+    scene.classList.remove('active', 'cross-in', 'cross-out');
+    scene.style.zIndex = '';
+  });
+  if (enterScene) enterScene.classList.remove('active');
+  openingScene.classList.add('active');
+  switchBGM('scene-opening');
+  _transitioning = false;
+
+  var revealOpening = function() {
+    video.removeEventListener('playing', revealOpening);
+    if (loading) loading.classList.add('hidden');
+    setTimeout(function() {
+      if (openingScene.classList.contains('active') && skipBtn) {
+        skipBtn.classList.add('is-visible');
+      }
+    }, 1500);
+  };
+  video.addEventListener('playing', revealOpening);
+  video.pause();
+  try { video.currentTime = 0; } catch (e) {}
+  video.poster = '';
+
+  var startPlayback = function() {
+    video.play().catch(function() {
+      video.load();
+      video.addEventListener('canplay', function retryOpening() {
+        video.removeEventListener('canplay', retryOpening);
+        video.play().catch(function() {
+          _enterStarted = false;
+          if (loading) loading.classList.add('hidden');
+          if (skipBtn) skipBtn.classList.add('is-visible');
+        });
+      });
+    });
+  };
+  startPlayback();
 }
 
 // === D01: OPENING VIDEO ===
@@ -2992,6 +3021,8 @@ function skipOpening() {
   // Keep the scene visible and offer Skip while enterSite() retries playback.
   video.addEventListener('error', function() {
     console.warn('[opening] video failed to load');
+    var loading = document.getElementById('loading');
+    if (loading) loading.classList.add('hidden');
     skipBtn.classList.add('is-visible');
   });
 })();
