@@ -3040,14 +3040,17 @@ function enterSite() {
     if (video.duration && isFinite(video.duration) && video.buffered.length) {
       bufferedProgress = video.buffered.end(video.buffered.length - 1) / video.duration * 100;
     }
-    // Keep the indicator alive while metadata is still unavailable, but reserve
-    // the final 10% for the browser's real "playing" event.
-    setFilmProgress(Math.min(90, Math.max(bufferedProgress, visualProgress + 1.5)));
+    // Keep the indicator alive while metadata is unavailable, reserving only
+    // the final 2% for confirmed playback so it never appears frozen at 90%.
+    setFilmProgress(Math.min(98, Math.max(bufferedProgress, visualProgress + 1.5)));
   };
   var progressTimer = setInterval(updateBufferedProgress, 160);
   video.addEventListener('progress', updateBufferedProgress);
 
+  var openingRevealed = false;
   var revealOpening = function() {
+    if (openingRevealed) return;
+    openingRevealed = true;
     video.removeEventListener('playing', revealOpening);
     video.removeEventListener('progress', updateBufferedProgress);
     clearInterval(progressTimer);
@@ -3067,11 +3070,18 @@ function enterSite() {
   video.poster = '';
 
   var startPlayback = function() {
-    video.play().catch(function() {
+    video.play().then(function() {
+      // Some browsers resolve play() without dispatching a second "playing"
+      // event when restoring cached media. Treat a resolved, unpaused video as
+      // confirmed playback and reveal it immediately.
+      if (!video.paused) revealOpening();
+    }).catch(function() {
       video.load();
       video.addEventListener('canplay', function retryOpening() {
         video.removeEventListener('canplay', retryOpening);
-        video.play().catch(function() {
+        video.play().then(function() {
+          if (!video.paused) revealOpening();
+        }).catch(function() {
           video.removeEventListener('playing', revealOpening);
           video.removeEventListener('progress', updateBufferedProgress);
           clearInterval(progressTimer);
