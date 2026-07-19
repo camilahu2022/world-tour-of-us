@@ -1692,7 +1692,7 @@ html, body {
   <div class="scene" id="scene-opening">
     <video id="openingVideo" class="scene-opening-video" muted playsinline preload="auto"
       poster="assets/raw/hall_bg_desktop.png">
-      <source src="assets/videos/开场动画+雪花转场.mp4" type="video/mp4">
+      <source src="assets/videos/开场动画+雪花转场.mp4?v=f6cd4ba" type="video/mp4">
     </video>
     <button class="scene-opening-skip" id="openingSkipBtn" onclick="skipOpening()">Skip opening</button>
   </div>
@@ -3043,17 +3043,32 @@ function enterSite() {
     // Keep the indicator alive while metadata is unavailable, reserving only
     // the final 2% for confirmed playback so it never appears frozen at 90%.
     setFilmProgress(Math.min(98, Math.max(bufferedProgress, visualProgress + 1.5)));
+    // Safari/Chrome may occasionally miss a restored media "playing" event.
+    // readyState + paused is a second authoritative playback check.
+    if (video.readyState >= 3 && !video.paused && typeof revealOpening === 'function') {
+      revealOpening();
+    }
   };
   var progressTimer = setInterval(updateBufferedProgress, 160);
   video.addEventListener('progress', updateBufferedProgress);
 
   var openingRevealed = false;
+  var loadingTimeout = setTimeout(function() {
+    if (openingRevealed) return;
+    video.removeEventListener('progress', updateBufferedProgress);
+    clearInterval(progressTimer);
+    _enterStarted = false;
+    if (loading) loading.classList.add('hidden');
+    if (skipBtn) skipBtn.classList.add('is-visible');
+    console.warn('[opening] playback timed out after 20s');
+  }, 20000);
   var revealOpening = function() {
     if (openingRevealed) return;
     openingRevealed = true;
     video.removeEventListener('playing', revealOpening);
     video.removeEventListener('progress', updateBufferedProgress);
     clearInterval(progressTimer);
+    clearTimeout(loadingTimeout);
     setFilmProgress(100);
     setTimeout(function() {
       if (loading) loading.classList.add('hidden');
@@ -3085,6 +3100,7 @@ function enterSite() {
           video.removeEventListener('playing', revealOpening);
           video.removeEventListener('progress', updateBufferedProgress);
           clearInterval(progressTimer);
+          clearTimeout(loadingTimeout);
           _enterStarted = false;
           if (loading) loading.classList.add('hidden');
           if (skipBtn) skipBtn.classList.add('is-visible');
