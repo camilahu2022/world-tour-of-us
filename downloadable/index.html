@@ -2620,8 +2620,8 @@ function closeBizDetail(id) {
   document.getElementById(id).classList.remove('show');
   _d08BizVisited[id] = true;
   if (_d08BizVisited['d08KSCommerce'] && _d08BizVisited['d08KSMainApp'] && _d08BizVisited['d08JDRetail']) {
-    var btn = document.getElementById('d08ReturnBtn');
-    if (btn) { btn.style.display = 'inline-flex'; }
+    var hotspot = document.getElementById('d08ReturnHotspot');
+    if (hotspot) hotspot.style.display = 'block';
   }
 }
 var _d08ToastTimer = null;
